@@ -1,0 +1,441 @@
+
+####################################################################################################################
+
+
+import random
+
+class Tile(): 
+    def __init__(self, ID, width, height):
+        self.x = 0
+        self.y = 0
+        self.ID = ID
+        self.width = width
+        self.height = height
+        self.color = "#" + ("%06x" % random.randint(0, 16777215))
+        self.possiblePositions = []
+        self.placed = False
+        self.flipped = False
+    
+    def getX(self): return self.x
+    
+    def getY(self): return self.y 
+    
+    def getID(self): return self.ID
+    
+    def getWidth(self): return self.width
+    
+    def getHeight(self): return self.height
+    
+    def getSurface(self): return (self.width * self.height)
+    
+    def getColor(self): return self.color
+    
+#    def __eq__(self, other): return self.args == other.args
+    
+    def compareTo(self, other): return self.getSurface() - other.getSurface()
+    
+    def flip(self): 
+        self.width, self.height = self.height, self.width
+        if self.flipped == False:
+            self.flipped = True
+        else: self.flipped = False
+    
+    def getFlipped(self): return self.flipped
+    
+    def setCoordinates(self, x, y): 
+        self.x = x
+        self.y = y
+        
+    def removeFirstPosition(self): self.possiblePositions.pop(0)
+    
+    def getPossiblePositions(self): return self.possiblePositions
+    
+    def addPossiblePosition(self, x, y, flipped): self.possiblePositions.append(((x, y), flipped))
+    
+    def placeThisTile(self): self.placed = True
+    
+    def removeThisTile(self): self.placed = False
+    
+    def getPlaced(self): return self.placed
+    
+    def sortPositions(self): self.possiblePositions = sorted(self.possiblePositions, key=lambda position: position[1], reverse=True)
+    
+    
+    ################################################################################################################
+    
+from tkinter import *
+
+class FieldFrame(object):
+    MARGINLEFT = 25
+    MARGINTOP = 25
+    
+    def __init__(self, field, scale):
+        self.SCALE = scale
+        self.field = field
+        
+        self.root = Tk()
+        
+        self.frame = Frame(self.root, width=1024, height=768, colormap="new")
+        self.frame.pack(fill=BOTH, expand=1)
+        
+        self.label = Label(self.frame, text="Heuristics VU - Tiling!")
+        self.label.pack(fill=X, expand=1)
+        
+        self.canvas = Canvas(self.frame,
+                             bg="white",
+                             width=self.field.getWidth() * self.SCALE + 1,
+                             height=self.field.getHeight() * self.SCALE + 1,
+                             cursor="PLUS")
+        self.canvas.pack()
+        
+        self.canvas.bind("<Button-1>", self.processMouseEvent)
+        self.canvas.focus_set()
+        
+    def setField(self, field):
+        for tile in field.getTiles():
+            tile = tile[0]
+            self.canvas.create_rectangle(tile.getX() * self.SCALE + 2,
+                                         tile.getY() * self.SCALE + 2,
+                                         (tile.getX() + tile.getWidth()) * self.SCALE + 2,
+                                         (tile.getY() + tile.getHeight()) * self.SCALE + 2,
+                                         fill=tile.getColor())
+        self.canvas.pack()
+        self.root.update()
+
+    def repaint(self, field):
+        self.canvas.delete("all")
+        self.setField(field)
+        self.root.after(500)
+            
+    def processMouseEvent(self, event):
+        coordinates = ((event.x / self.SCALE), ",", (event.y / self.SCALE))
+        self.canvas.create_text(event.x, event.y, text=coordinates)
+        
+####################################################################################################################
+
+
+
+import numpy
+#from Tile import Tile
+
+
+class Field(object):
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self.tileset = []
+        self.placedID = []
+
+        self.field = [[0 for y in range(self.height)] for x in range(self.width)]
+
+    def __copy__(self):
+        return type(self)
+
+    def getHeight(self):
+        return self.height
+
+    def getWidth(self):
+        return self.width
+
+    def getTile(self, index):
+        return self.tileset[index]
+
+    def getTiles(self):
+        return self.tileset
+
+    def addTile(self, tile, placed, score):
+        self.tileset.append([tile, placed, score])
+    
+    def sortTileset(self):
+        print(self.tileset[1])
+        print(self.tileset[2])
+        print(self.tileset[0])
+#        self.tileset = sorted(self.tileset, key=lambda x:(x[1],-x[2], x[0]))
+        self.tileset = sorted(self.tileset, key=lambda tile: (tile[1],-tile[2]))        
+
+    def getNumberOfTiles(self):
+        return len(self.tileset)
+    
+    def getLastPlacedID(self): return self.placedID[-1]
+    
+    def removeLastPlacedID(self): self.placedID.pop()
+
+    def placeTile(self, tile, x, y):
+        if not (x >= self.width or y >= self.height):
+            for i in range(tile.getWidth()):
+                for j in range(tile.getHeight()):
+                    self.field[x + i][y + j] = tile.getID()
+            tile.setCoordinates(x, y)
+            tile.placeThisTile()
+            self.placedID.append(tile.getID())
+            for instance in self.tileset:
+                if instance[0] == tile:
+                    self.tileset.remove(instance)
+                    instance[1] = True
+                    self.tileset.append(instance)
+            return True
+        return False
+
+    def inRange(self, tile, x, y):
+        if ((self.width - x >= tile.getWidth()) and (self.height - y >= tile.getHeight())):
+            for i in range(tile.getWidth()):
+                for j in range(tile.getHeight()):
+                    if (self.isOccupied(x + i, y + j)):
+                        return False
+            return True
+        return False
+
+    def removeTile(self, tile):
+        for i in range(tile.getWidth()):
+            for j in range(tile.getHeight()):
+                self.field[tile.getX() + i][tile.getY() + j] = 0
+        for instance in self.tileset:
+            if instance[0] == tile:
+                self.tileset.remove(instance)
+                instance[1] = False
+                self.tileset.append(instance)
+        self.placedID.remove(tile.getID())
+        tile.setCoordinates(0, 0)
+
+    def getTileAt(self, x, y):
+        return self.field[x][y]
+
+    def isOccupied(self, x, y):
+        return self.field[x][y] != 0
+
+    def solved(self):
+        for x in range(self.getWidth()):
+            for y in range(self.getHeight()):
+                if not self.isOccupied(x, y): return False
+        return True
+
+    def getField(self):
+        return self.field
+
+    def isEmpty(self, x, y):
+        return self.field[x][y] == 0
+    
+    def getFilledPercentage(self):
+        filledCoordinates = 0 
+        totalCoordinates = 0
+        for x in range(self.width):
+            for y in range(self.height):
+                totalCoordinates += 1
+                if self.isOccupied(x, y):
+                    filledCoordinates += 1
+        return (float(filledCoordinates)/totalCoordinates * 100)
+    
+    #################################################################################################################
+    
+import os, sys, time
+sys.setrecursionlimit(200000)
+#os.chdir("../Configurations")
+
+#from tilingObjects.Version1Tile import Tile
+#from tiling.FieldFrame import FieldFrame
+#from tiling.Version1Field import Field
+
+class Assignment():
+    
+    def __init__(self):
+#        self.CONFIGURATION = configuration
+        self.steps = 0
+        self.maxFilledPercentage = 0
+        self.maxfilledStep = 0
+#        i = 1
+#        for idx, each_line in enumerate(open(self.CONFIGURATION, 'r')):
+#            if idx == 0:
+#                width, height, scale = map(int, each_line.strip().split("\t"))
+#                self.field = Field(width, height)
+#            else: 
+#                frequency, width, height = map(int, each_line.strip().split("\t"))
+#                for idx in range(frequency):
+#                    tile = Tile(i, width, height)
+#                    self.field.addTile(tile, False, tile.getSurface())
+#                    i += 1 #tileID
+        tile1 = Tile(1,2,2)                                                         #    ID,HEIGHT,WIDTH
+        tile2 = Tile(2,3,3)
+        tile3 = Tile(3,3,3)
+        tile4 = Tile(4,3,3)
+        tile5 = Tile(5,3,3)
+        tile6 = Tile(6,3,3)
+        tile7 = Tile(7,3,3)
+        tile8 = Tile(8,3,3)
+#        tile9 = Tile(9,5,5)
+        tile10 = Tile(10,5,5)
+        tile11 = Tile(11,5,5)
+        tile12 = Tile(12,5,5)
+        tile13 = Tile(13,7,7)
+        tile14 = Tile(14,7,7)
+        tile15 = Tile(15,7,7)
+#        tile10 = Tile(10,6,11)
+        self.field = Field(17,17)
+        self.field.addTile(tile1,False,tile1.getSurface())
+        self.field.addTile(tile2,False,tile2.getSurface())
+        self.field.addTile(tile3,False,tile3.getSurface())
+        self.field.addTile(tile4,False,tile4.getSurface())
+        self.field.addTile(tile5,False,tile5.getSurface())
+        self.field.addTile(tile6,False,tile6.getSurface())
+        self.field.addTile(tile7,False,tile7.getSurface())
+        self.field.addTile(tile8,False,tile8.getSurface())
+#        self.field.addTile(tile9,False,tile9.getSurface())
+        self.field.addTile(tile10,False,tile10.getSurface())
+        self.field.addTile(tile11,False,tile11.getSurface())
+        self.field.addTile(tile12,False,tile12.getSurface())
+        self.field.addTile(tile13,False,tile13.getSurface())
+        self.field.addTile(tile14,False,tile14.getSurface())
+        self.field.addTile(tile15,False,tile15.getSurface())
+
+        self.frame = FieldFrame(self.field, 20)
+#        self.frame.root.mainloop()
+        self.recursivePlacing()
+        self.frame.root.mainloop()
+#        print(self.field.field[19][0])                    ##################USEFUL##################################
+#        print(self.field.tileset[1])
+        
+    def solve(self):
+#        logging.debug("Class DepthFirstBacktracker solve called")
+        i, j = 0,0      # Where to start searching
+        self.maze.grid[k_curr][l_curr].visited = True     # Set initial cell to visited
+        visited_cells = list()                  # Stack of visited cells for backtracking
+        path = list()                           # To track path of solution and backtracking cells
+#        if not self.quietMode:
+#            print("\nSolving the maze with depth-first search...")
+
+#        time_start = time.clock()
+
+        while not self.field.solved(): #(i, j) != self.maze.exit_coor:     # While the exit cell has not been encountered
+#            neighbour_indices = self.maze.find_neighbours(k_curr, l_curr)    # Find neighbour indices
+#            neighbour_indices = self.maze.validate_neighbours_solve(neighbour_indices, k_curr,l_curr, self.maze.exit_coor[0], self.maze.exit_coor[1], self.neighbor_method)
+            
+            self.field.sortTileset()
+            instance = self.field.getTiles()[0]
+            tile = instance[0]                              #####################       GET BIGGEST TILE FROM SORTED TILESET
+
+            if tile.getPlaced() == False: #if the tile in not on the field yet (=True when backtracking)
+                for x in range(self.field.getWidth()): #determine available positions for the tile
+                    for y in range(self.field.getHeight()):
+                        if self.field.inRange(tile, x, y):
+                            self.field.placeTile(tile, x, y)
+                            self.frame.repaint(self.field)
+#               
+#                            tile.addPossiblePosition(x, y, False)
+                        
+
+#            if not tile.getPossiblePositions() == []: #if the tile can be placed in neighbourhood
+#                visited_cells.append(tile.possiblePosition[0])
+#                path.append(tile.possiblePosition[0], False)
+#                
+#                
+#                
+#            if neighbour_indices is not None:   # If there are unvisited neighbour cells
+#                visited_cells.append((k_curr, l_curr))              # Add current cell to stack
+#                path.append(((k_curr, l_curr), False))  # Add coordinates to part of search path
+#                k_next, l_next = random.choice(neighbour_indices)   # Choose random neighbour
+#                self.maze.grid[k_next][l_next].visited = True                 # Move to that neighbour
+#                k_curr = k_next
+#                l_curr = l_next
+#
+#            elif len(visited_cells) > 0:              # If there are no unvisited neighbour cells
+#                path.append(((k_curr, l_curr), True))   # Add coordinates to part of search path
+#                k_curr, l_curr = visited_cells.pop()    # Pop previous visited cell (backtracking)
+#
+#        path.append(((k_curr, l_curr), False))  # Append final location to path
+#        if not self.quietMode:
+#            print("Number of moves performed: {}".format(len(path)))
+#            print("Execution time for algorithm: {:.4f}".format(time.clock() - time_start))
+#
+#        logging.debug('Class DepthFirstBacktracker leaving solve')
+#        return path
+
+        
+    def recursivePlacing(self):
+        
+#        filledPercentage = self.field.getFilledPercentage()
+#        if filledPercentage > self.maxFilledPercentage:
+#            self.maxFilledPercentage = filledPercentage
+#            self.maxfilledStep = self.steps
+#        if self.steps == 10:                               ######################IMPORTAINT
+#            print("Puzzle %s not solved in %d steps, this took %.3f seconds. %.2s percent of the field has been filled at step %d." % (self.CONFIGURATION, self.steps, (time.time() - start_time), self.maxFilledPercentage,self.maxfilledStep)
+#            sys.exit()
+#            return
+        if self.field.solved(): 
+##            print "Puzzle %s solved in %d steps, this took %.3f seconds." % (self.CONFIGURATION, self.steps, (time.time() - start_time))
+            return
+              
+        self.field.sortTileset() #sorts tileSet based on placed boolean and tile surface
+        instance = self.field.getTiles()[0] #get the first tile from the tileset, not placed and biggest surface
+#        print(self.field.tileset[0][0].width)##############################USEFUL################################
+        tile = instance[0]
+        if tile.getPlaced() == False: #if the tile in not on the field yet (=True when backtracking)
+            if tile.getFlipped() == True:
+                tile.flip()
+            for x in range(self.field.getWidth()): #determine available positions for the tile
+                for y in range(self.field.getHeight()):
+                    if self.field.inRange(tile, x, y):
+                        tile.addPossiblePosition(x, y, False)
+            if (tile.getWidth() != tile.getHeight()):
+                tile.flip()
+                for x in range(self.field.getWidth()): #determine available positions for the flipped tile
+                    for y in range(self.field.getHeight()):
+                        if self.field.inRange(tile, x, y):
+                            tile.addPossiblePosition(x, y, True)
+                tile.flip()
+
+        if tile.getPossiblePositions() == []: #if the tile cannot be placed anywhere
+            lastPlacedID = self.field.getLastPlacedID()
+            for instance in self.field.getTiles():
+                tile = instance[0]
+                if tile.getID() == lastPlacedID:
+                    lastPlacedTile = tile
+            if lastPlacedTile.getPossiblePositions() != []:
+                lastPlacedTile.removeFirstPosition()
+            self.field.removeTile(lastPlacedTile)
+            self.frame.repaint(self.field)
+#            self.frame.root.update_idletasks                              #############NO EFFECT
+            while lastPlacedTile.getPossiblePositions() == []: #if the last placed tile cannot be placed anywhere else
+                lastPlacedTile.removeThisTile()
+                self.field.sortTileset()
+                lastPlacedID = self.field.getLastPlacedID()
+                for instance in self.field.getTiles():
+                    tile = instance[0]
+                    if tile.getID() == lastPlacedID:
+                        lastPlacedTile = tile
+                if lastPlacedTile.getPossiblePositions() != []:
+                    lastPlacedTile.removeFirstPosition()
+                self.field.removeTile(lastPlacedTile)                       
+                self.frame.repaint(self.field)  
+#                self.frame.root.update_idletasks()                          #############NO EFFECT
+
+            self.steps += 1
+            self.recursivePlacing()
+            return
+        
+        tile.sortPositions() #sort positions based on the adjacent side scores
+        
+        for position in tile.getPossiblePositions(): #determine position for the tile to be placed and place tile
+            x = position[0][0]
+            y = position[0][1]
+            if position[1] == True and tile.getFlipped() == False:
+                tile.flip()
+            elif position[1] == False and tile.getFlipped() == True:
+                tile.flip()
+            if self.field.placeTile(tile, x, y):
+                self.frame.repaint(self.field)
+#                self.frame.root.update_idletasks()                           #############NO EFFECT
+
+                self.steps += 1
+                self.recursivePlacing()
+                return
+        self.frame.root.mainloop()
+
+#for i in range(5):
+#    for j in range(5):
+#        CONFIGURATION = "15-%d-%d.txt" %(i,j)
+#        start_time = time.time()        
+Assignment()
+        
+#field5 = Field(1700,1700)
+#frame=FieldFrame(field5,20)
+#frame.root.mainloop()
+
