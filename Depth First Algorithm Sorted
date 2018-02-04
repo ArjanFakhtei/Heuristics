@@ -213,7 +213,7 @@ class Assignment():
         self.tiles = list()
         idx = 0
         
-        for line in open("C:/Users/Arjan/Desktop/tilings/15-0-3.tiles"):
+        for line in open("Path/to/tilings/folder/15-0-0.tiles"):
             line = line.split(' ')
             if idx == 0:
                 
